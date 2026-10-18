@@ -1,0 +1,47 @@
+# Proves a formula change installs before anyone runs `brew install`: a wrong
+# tarball URL or sha256 fails here, on the pull request, rather than on a
+# user's machine.
+#
+# setup-homebrew taps this checkout as mandalacomputer/tap (the repository is
+# named homebrew-tap), so every command below works on the tapped formula
+# exactly as a user's install would.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  style:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: Homebrew/actions/setup-homebrew@4790763c0a3ba4036f72634dc079c4a7dfcd4878
+      - run: brew style mandalacomputer/tap
+
+  install:
+    runs-on: macos-latest
+    env:
+      HOMEBREW_NO_INSTALL_FROM_API: 1
+      HOMEBREW_NO_AUTO_UPDATE: 1
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: Homebrew/actions/setup-homebrew@4790763c0a3ba4036f72634dc079c4a7dfcd4878
+      # From source: the formula has no bottles, and the point is to fetch the
+      # npm tarball the formula names and check it against its sha256.
+      - run: brew install --build-from-source mandalacomputer/tap/mandala
+      # The formula's own test block: help, manifest and the installed version.
+      - run: brew test mandalacomputer/tap/mandala
+      - run: brew audit --strict --online mandalacomputer/tap/mandala
